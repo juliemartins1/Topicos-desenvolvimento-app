@@ -11,7 +11,7 @@ import { PrimaryButton } from '@/components/primary-button';
 import { Colors, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth-context';
 import type { Anotacao } from '@/models/usuario';
-import { api } from '@/services/api';
+import { api, ApiError } from '@/services/api';
 
 // ANOTAÇÕES — src/app/(app)/anotacoes.tsx  ->  rota "/anotacoes"
 //
@@ -42,7 +42,7 @@ export default function AnotacoesScreen() {
     try {
       setAnotacoes(await api.listarAnotacoes(token));
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível carregar.');
+      setErro(e instanceof ApiError ? e.message : 'Não foi possível carregar.');
     } finally {
       setCarregando(false);
     }
@@ -57,7 +57,7 @@ export default function AnotacoesScreen() {
       setAnotacoes((atuais) => [nova, ...atuais]);
       setTexto('');
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível salvar.');
+      setErro(e instanceof ApiError ? e.message : 'Não foi possível salvar.');
     } finally {
       setSalvando(false);
     }

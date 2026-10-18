@@ -1,229 +1,141 @@
-# Aula 6 — Autenticação com Context API
+# Trabalho Prático II — Autenticação, Contexto e Rotas Protegidas
 
-Aplicativo de exemplo com **cadastro**, **login**, **logout** e **rotas que
-dependem de quem está logado**. O estado da sessão vive em um contexto React
-(`AuthProvider` / `useAuth`), e os layouts do Expo Router leem esse contexto
-para decidir quais telas existem.
-
-O projeto tem duas partes:
-
-| Pasta | O que é | Como rodar |
-| --- | --- | --- |
-| `server/` | API em Node.js (Express) com os dados **em memória** | `cd server && npm install && npm start` |
-| raiz | App Expo (React Native) | `npm install && npx expo start` |
+**Aluna:** Julie Monteiro  
+**Disciplina:** Desenvolvimento de Aplicativos
 
 ## Como executar
 
-Dois terminais.
+Requisitos: Node.js e npm instalados. Abra dois terminais na pasta `Trabalho_2`.
 
+**Terminal 1 — API:**
 ```bash
-# terminal 1 — o servidor
-cd Aula06/server
+cd server
 npm install
 npm start
 ```
 
+**Terminal 2 — Expo:**
 ```bash
-# terminal 2 — o app
-cd Aula06
 npm install
 npx expo start
 ```
 
-Depois: `w` para o navegador, `a` para Android, `i` para iOS.
+O servidor escuta na porta 3000 e mantém os dados em memória.
 
-O servidor imprime as **contas de teste** ao subir:
+### Rodando no celular
 
-| E-mail | Senha | Papel |
-| --- | --- | --- |
-| `ana@ifrs.edu.br` | `123456` | usuário |
-| `admin@ifrs.edu.br` | `admin123` | admin |
+**Pelo cabo USB (Android, mais simples):** com a depuração USB ativada, rode `npm run celular-usb` no lugar de `npx expo start`. O script faz `adb reverse` das portas 8081 (Expo) e 3000 (API), então o celular acessa o computador pelo cabo e o Wi-Fi não interfere.
 
-Qualquer conta criada pelo cadastro vale até o servidor ser reiniciado — o
-"banco" é um `Map` na memória do processo (`server/banco.js`).
-
-### O app não encontra o servidor?
-
-O app descobre o endereço do servidor sozinho: usa o IP do computador em que o
-Expo está rodando (`Constants.expoConfig.hostUri`) na porta 3000. Isso funciona
-no navegador, no emulador e no celular físico **na mesma rede Wi-Fi**. Se
-precisar apontar para outro lugar:
+**Pelo Wi-Fi (Expo Go):** celular e computador precisam estar na mesma rede. O app usa o IP que o Expo informa; se a mensagem de erro mostrar `127.0.0.1`, inicie o Expo informando o IP do computador:
 
 ```bash
-EXPO_PUBLIC_API_URL=http://192.168.0.10:3000 npx expo start
+EXPO_PUBLIC_API_URL=http://IP_DO_COMPUTADOR:3000 npx expo start
 ```
 
-A tela de login mostra a URL que está sendo usada.
+Para conferir a rede, abra `http://IP_DO_COMPUTADOR:3000` no navegador do celular: deve aparecer o JSON do servidor. Se não abrir, libere a porta no firewall (`sudo ufw allow 3000` no Ubuntu).
 
-## A ideia central: um estado, muitos leitores
+Se o servidor não responder em 8 segundos, o app mostra o erro de conexão em vez de ficar carregando indefinidamente.
 
-Quem está logado interessa a várias partes do app ao mesmo tempo:
+### Contas de teste
 
-* o layout raiz precisa saber se mostra o login ou o app;
-* o layout do app precisa saber se a pessoa é admin;
-* a tela inicial mostra o nome;
-* a tela de anotações manda o token em cada requisição.
+| E-mail | Senha | Papel |
+|---|---|---|
+| `ana@ifrs.edu.br` | `123456` | usuario |
+| `moderador@ifrs.edu.br` | `mod123` | moderador |
+| `admin@ifrs.edu.br` | `admin123` | admin |
 
-Passar isso por props não funciona — o layout raiz nem tem como passar props
-para as telas. A **Context API** resolve com três peças, todas em
-`src/contexts/auth-context.tsx`:
+Reiniciar o servidor apaga usuários cadastrados durante o uso, anotações e tokens; as contas de teste e as anotações iniciais da Ana são recriadas.
 
-```tsx
-// 1. o canal
-const AuthContext = createContext<AuthContextValue | null>(null);
+## Requisitos implementados
 
-// 2. o provider: um componente comum que guarda o estado e o coloca no canal
-export function AuthProvider({ children }) {
-  const [sessao, setSessao] = useState<Sessao | null>(null);
-  async function entrar(email, senha) { setSessao(await api.login(email, senha)); }
-  async function sair() { /* ... */ setSessao(null); }
-  return <AuthContext value={{ usuario: sessao?.usuario ?? null, token: sessao?.token ?? null, entrar, cadastrar, sair }}>{children}</AuthContext>;
-}
+### 4.1 — Sessão expirada (401)
+O tratamento foi centralizado em `src/services/api.ts`: a função comum de requisição chama o callback registrado quando uma requisição com token recebe 401. O `AuthProvider`, em `src/contexts/auth-context.tsx`, limpa a sessão, apaga o AsyncStorage e marca `sessaoExpirada`; o layout raiz troca para o grupo de autenticação porque o estado mudou, sem `router.replace()`. Um 403 não aciona o callback e permanece como erro de permissão. A tela `src/app/(auth)/login.tsx` mostra “Sua sessão expirou. Entre novamente.” O logout voluntário limpa esse aviso.
 
-// 3. o hook: qualquer componente abaixo do provider lê o canal
-export function useAuth() {
-  const contexto = useContext(AuthContext);
-  if (contexto === null) throw new Error('useAuth() só pode ser usado dentro de <AuthProvider>.');
-  return contexto;
-}
+### 4.2 — Estado carregando
+`carregando` pertence ao `AuthContext` e fica verdadeiro durante login/cadastro. `src/components/tela-de-espera.tsx` fornece o indicador e a mensagem, usados nas telas de autenticação. A tela de login mantém seus estados locais enquanto apenas troca condicionalmente o conteúdo renderizado pela espera; assim, quando a requisição falha, o componente continua montado e a mensagem de erro permanece. O erro é tratado com `instanceof ApiError`.
+
+### 4.3 — Detalhe de anotação
+A antiga `src/app/(app)/anotacoes.tsx` foi reorganizada em `src/app/(app)/anotacoes/index.tsx`, e `src/app/(app)/anotacoes/[id].tsx` implementa o detalhe. `src/components/anotacao-item.tsx` permite tocar no item; o identificador é passado como parâmetro e a tela busca os dados novamente por `api.buscarAnotacao`, em `src/services/api.ts`. O servidor implementa `GET /anotacoes/:id` em `server/index.js`, usando `banco.buscarAnotacao` em `server/banco.js`, que responde 404 tanto para item inexistente quanto para item de outra pessoa. O detalhe mostra espera, erro (incluindo 404) ou texto/data formatada.
+
+A rota fica dentro de `(app)` porque o grupo representa as telas que só existem com uma sessão autenticada. Assim, o `Stack.Protected` do layout raiz protege também o detalhe. Se estivesse fora do grupo, não herdaria a proteção interna do grupo logado e seria necessário configurar uma proteção própria; a tela poderia ficar acessível na árvore de navegação para quem não está autenticado, embora o servidor ainda devesse rejeitar a requisição sem token.
+
+### 4.4 — Papel moderador
+O tipo `Papel` em `src/models/usuario.ts` inclui `moderador`. `server/banco.js` cria a conta de teste e reúne as anotações com o nome do autor; `server/index.js` usa o middleware reutilizável `somentePapeis` para proteger `GET /moderacao/anotacoes` para moderador/admin. A tela `src/app/(app)/moderacao.tsx` lista as anotações e autores. `src/app/(app)/_layout.tsx` protege a rota para moderador e admin, mantendo `/admin` exclusivo do admin. `src/app/(app)/index.tsx` mostra o link de moderação apenas para esses papéis e `src/app/(auth)/login.tsx` inclui atalho para preencher a conta de moderadora.
+
+Arquivos alterados para acrescentar/usar o papel:
+- `server/banco.js`: cria a conta moderadora e expõe as anotações de todos com autor.
+- `server/index.js`: lista a conta/rota e exige `moderador` ou `admin` no middleware.
+- `src/models/usuario.ts`: acrescenta `moderador` ao tipo `Papel` e o autor opcional no tipo de anotação.
+- `src/app/(app)/_layout.tsx`: restringe a tela de moderação aos papéis permitidos.
+- `src/app/(app)/index.tsx`: exibe o link conforme o papel.
+- `src/app/(app)/moderacao.tsx`: apresenta a lista de moderação.
+- `src/app/(auth)/login.tsx`: oferece o atalho para preencher a conta de moderadora.
+- `src/services/api.ts`: adiciona a chamada autenticada à rota de moderação.
+
+### 4.5 — Sessão persistente
+`src/services/api.ts` usa `@react-native-async-storage/async-storage` para ler, salvar e apagar a sessão. Login/cadastro salvam a sessão; logout e 401 apagam. Ao abrir o app, `AuthProvider` lê a sessão e chama `GET /auth/me`. O estado `restaurando` mantém uma tela de espera no layout raiz até terminar a validação, impedindo que o login apareça brevemente antes da decisão.
+
+Se o servidor estiver fora do ar durante a abertura, a requisição falha com `ApiError` de status `0`. O app não assume que o token é válido e mostra o login, mas preserva o token salvo para permitir uma nova tentativa em uma próxima abertura. Somente um 401 confirma que a sessão deixou de ser válida e remove o token.
+
+### 4.6 — Funções recriadas a cada render
+Quando o `value` de um contexto muda por identidade, React re-renderiza os componentes consumidores que usam aquele contexto, mesmo que alguns campos tenham o mesmo conteúdo. Neste projeto, o `AuthProvider` recria `entrar`, `cadastrar`, `sair` e o objeto `value` a cada renderização. O `app.json` tem `experiments.reactCompiler: true`, portanto o React Compiler pode otimizar funções e valores automaticamente; isso não significa que toda renderização adicional desapareça em qualquer cenário e deve ser observado, não presumido.
+
+Sem o React Compiler, envolveria as funções em `useCallback` com suas dependências e montaria o objeto do contexto com `useMemo`, também com dependências corretas. Como evidência inicial, `src/components/sessao-atual.tsx` registra no console `[evidência Context API] SessaoAtual renderizou` com a rota e o papel atual. Faça login e observe o terminal; depois desative `reactCompiler` em `app.json`, reinicie o Expo limpando o cache (`npx expo start -c`) e compare. O log indica renderizações, mas não prova sozinho que elas causam lentidão; o Profiler seria a medida mais completa.
+
+**Resultado observado.** Com o log em `SessaoAtual`, executei o fluxo Perfil → Sair → Entrar com `reactCompiler` ligado e desligado:
+
+| Ação | `reactCompiler: true` | `reactCompiler: false` |
+|---|---|---|
+| Abrir Perfil (`/perfil`) | 2 | 2 |
+| Sair → tela de login (`/login`) | 2 | 2 |
+| Entrar → Início (`/`) | 1 | 1 |
+
+O número de renderizações foi o mesmo nas duas configurações. As renderizações acompanharam mudanças reais do contexto (usuário entrou ou saiu) e da rota, e não a recriação de `entrar`, `cadastrar` e `sair`. Concluo que, neste app pequeno, a recriação das funções não gera custo perceptível. Em um contexto com muitos consumidores, `useCallback` e `useMemo` (ou o React Compiler) evitariam renderizações desnecessárias. Após o teste, `reactCompiler` voltou a `true`.
+
+## Tabela de rotas do servidor
+
+| Método | Rota | Autenticação/permissão | Resposta principal |
+|---|---|---|---|
+| GET | `/` | pública | lista contas de teste e rotas |
+| POST | `/auth/cadastro` | pública | cria usuário e sessão (201) |
+| POST | `/auth/login` | pública | inicia sessão |
+| GET | `/auth/me` | token válido | usuário atual |
+| POST | `/auth/logout` | token válido | encerra sessão (204) |
+| GET | `/anotacoes` | token válido | anotações do usuário |
+| POST | `/anotacoes` | token válido | cria anotação (201) |
+| GET | `/anotacoes/:id` | token válido | anotação própria ou 404 |
+| GET | `/usuarios` | admin | lista usuários e contagens; 403 para outros papéis |
+| GET | `/moderacao/anotacoes` | moderador ou admin | todas as anotações com autor; 403 para usuario |
+
+## Evidências e vídeo
+
+Capturas feitas com o app em execução em um celular Android:
+
+| Detalhe de uma anotação (4.3) | Início como Ana — sem Moderação (4.4) | Início como Moderadora — com Moderação (4.4) |
+|---|---|---|
+| <img src="docs/prints/detalhe-anotacao.jpg" width="220"> | <img src="docs/prints/inicio-ana.jpg" width="220"> | <img src="docs/prints/inicio-moderadora.jpg" width="220"> |
+
+Na tela da Ana, o menu mostra apenas "Minhas anotações" e "Perfil"; para a moderadora aparece também "Moderação", e "Administração" continua escondida, pois é exclusiva do admin.
+
+| Tela de espera ao restaurar a sessão (4.2/4.5) | Aviso de sessão expirada no login (4.1) |
+|---|---|
+| <img src="docs/prints/restaurando-sessao.jpg" width="220"> | <img src="docs/prints/sessao-expirada.jpg" width="220"> |
+
+A tela "Restaurando sua sessão…" aparece ao abrir o app enquanto o token salvo é validado com `GET /auth/me`. O aviso de sessão expirada apareceu após reiniciar o servidor com o app logado: a requisição seguinte recebeu 401 e o app voltou sozinho ao login.
+
+| Tela de moderação (4.4) |
+|---|
+| <img src="docs/prints/moderacao.jpg" width="220"> |
+
+Logada como moderadora, a tela lista as anotações de todos os usuários com o nome do autor, vindas de `GET /moderacao/anotacoes`.
+
+**Vídeo de explicação (até 10 minutos):** [inserir link com acesso liberado ao professor]. No vídeo, demonstrar o fluxo de login, a expiração/restauração da sessão e a diferença entre proteção visual do app e autorização do servidor.
+
+### Teste de autorização para o vídeo
+
+Faça login como Ana e copie o token exibido em Perfil. Em outro terminal, execute (substitua `TOKEN_DA_ANA` pelo token real):
+```bash
+curl -i http://localhost:3000/moderacao/anotacoes \
+  -H 'Authorization: Bearer TOKEN_DA_ANA'
 ```
-
-Quando `sessao` muda, **todo componente que chamou `useAuth()` re-renderiza**,
-como se o estado fosse dele. O componente `SessaoAtual` (que aparece no login,
-no início e no perfil) existe só para tornar isso visível.
-
-## Rotas que dependem do usuário
-
-O provider fica no layout raiz, envolvendo tudo. E o próprio layout raiz é o
-primeiro leitor do contexto:
-
-```tsx
-// src/app/_layout.tsx
-export default function RootLayout() {
-  return (
-    <AuthProvider>
-      <RotasDoApp />
-    </AuthProvider>
-  );
-}
-
-function RotasDoApp() {
-  const { usuario } = useAuth();
-  const logado = usuario !== null;
-
-  return (
-    <Stack>
-      <Stack.Protected guard={!logado}>
-        <Stack.Screen name="(auth)" />   {/* login, cadastro */}
-      </Stack.Protected>
-      <Stack.Protected guard={logado}>
-        <Stack.Screen name="(app)" />    {/* início, anotações, perfil, admin */}
-      </Stack.Protected>
-      <Stack.Screen name="+not-found" />
-    </Stack>
-  );
-}
-```
-
-`<Stack.Protected guard={false}>` **remove** as rotas filhas do navegador. Duas
-consequências:
-
-1. Não dá para chegar nelas — nem por `Link`, nem por `router.push`, nem por
-   link externo. O Expo Router leva para a primeira rota disponível.
-2. Se o usuário está em uma delas quando o guard vira `false`, ele é levado
-   embora na hora.
-
-É por isso que **nenhuma tela chama `router.replace()` depois do login ou do
-logout**. `entrar()` muda o estado, o layout re-renderiza com outro guard, e a
-navegação acontece sozinha.
-
-Dentro do grupo logado, a mesma ferramenta responde a outra pergunta — não
-"está logado?", mas "quem é?":
-
-```tsx
-// src/app/(app)/_layout.tsx
-<Stack.Protected guard={usuario?.papel === 'admin'}>
-  <Stack.Screen name="admin" />
-</Stack.Protected>
-```
-
-Para a Ana, `/admin` não existe. Para o Administrador, existe. A tela inicial
-usa o mesmo `usuario` para decidir se mostra o link — o menu decide o que
-**mostrar**, o layout decide o que **existe**.
-
-> A proteção no app é só para a interface. O servidor confere de novo em toda
-> requisição: `GET /usuarios` responde `403` para qualquer token que não seja
-> de admin, não importa o que o app faça.
-
-## Estrutura
-
-```
-src/app/
-├── _layout.tsx            AuthProvider + Stack.Protected (logado / não logado)
-├── (auth)/                só existe SEM usuário
-│   ├── _layout.tsx        pilha login → cadastro (anchor: login)
-│   ├── login.tsx          /login
-│   └── cadastro.tsx       /cadastro
-├── (app)/                 só existe COM usuário
-│   ├── _layout.tsx        Stack.Protected para admin
-│   ├── index.tsx          /            início: nome, menu
-│   ├── anotacoes.tsx      /anotacoes   lista + criação, com o token
-│   ├── perfil.tsx         /perfil      dados da sessão, sair
-│   └── admin.tsx          /admin       lista de usuários (só admin)
-└── +not-found.tsx
-
-src/contexts/auth-context.tsx   AuthProvider, useAuth
-src/services/api.ts             fetch + token no cabeçalho
-src/models/usuario.ts           tipos Usuario, Sessao, Anotacao
-
-server/
-├── index.js               rotas HTTP (Express)
-└── banco.js               Maps em memória, hash de senha, sessões
-```
-
-## O servidor
-
-| Rota | Precisa de token? | Faz |
-| --- | --- | --- |
-| `POST /auth/cadastro` | não | cria a conta e já devolve `{ token, usuario }` |
-| `POST /auth/login` | não | confere e-mail/senha e devolve `{ token, usuario }` |
-| `GET /auth/me` | sim | devolve o usuário dono do token |
-| `POST /auth/logout` | sim | invalida o token |
-| `GET /anotacoes` | sim | anotações **do dono do token** |
-| `POST /anotacoes` | sim | cria uma anotação para o dono do token |
-| `GET /usuarios` | sim, de admin | todas as contas |
-
-O token vai no cabeçalho `Authorization: Bearer <token>` — é o
-`src/services/api.ts` quem coloca, a partir do `token` do contexto.
-
-O servidor responde com um atraso artificial de 400 ms para os estados de
-"carregando" ficarem visíveis. `ATRASO=0 npm start` desliga isso.
-
-## Roteiro sugerido em aula
-
-1. Subir o servidor e abrir `http://localhost:3000` no navegador: as rotas e as
-   contas de teste.
-2. Abrir o app no navegador (`w`). Reparar no `SessaoAtual`: `usuario null`.
-3. Errar a senha: a mensagem veio do servidor (olhar o terminal: `401`).
-4. Entrar como Ana. A tela trocou **sem nenhum `router.push`** — mostrar o
-   `entrar()` no provider e o `guard` no layout raiz.
-5. Início: o nome veio do contexto. Tocar em *Tentar abrir /admin*: nada
-   acontece — a rota não existe para a Ana.
-6. Anotações: cada toque aparece no terminal do servidor com o mesmo token.
-7. Perfil → Sair: de volta ao login, de novo sem navegação explícita.
-8. Entrar como Administrador: o link *Administração* apareceu, e `/admin` abre.
-9. Cadastrar uma conta nova, voltar como admin e ver a lista. Reiniciar o
-   servidor: a conta sumiu.
-10. Com o app logado, reiniciar o servidor e tocar em *Conferir token no
-    servidor*: `401` — o token morreu com o processo.
-
-Na web, ao abrir uma URL protegida direto (por exemplo `/anotacoes` sem
-login), a tela de login aparece e `usePathname()` já diz `/login`, mas a barra
-de endereço só é reescrita na próxima navegação.
-
-## Exercícios
-
-Os exercícios desta aula viraram o
-[Trabalho II](../Trabalhos/Trabalho%20II.md): sessão expirada (`401`),
-`carregando` no contexto, `/anotacoes/[id]`, papel `moderador`, sessão com
-`AsyncStorage` e análise do `AuthProvider`.
+A resposta esperada é `403 Forbidden`. Para demonstrar, use o token de moderador/admin e compare com a resposta `200`.

@@ -1,4 +1,6 @@
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type { Anotacao, Sessao, Usuario, UsuarioResumo } from '@/models/usuario';
 
@@ -19,8 +21,16 @@ import type { Anotacao, Sessao, Usuario, UsuarioResumo } from '@/models/usuario'
 // Constants.expoConfig.hostUri ("192.168.0.10:8081").
 //
 // Para apontar para outro lugar: EXPO_PUBLIC_API_URL=http://... npx expo start
-const hostDoExpo = Constants.expoConfig?.hostUri?.split(':')[0] ?? 'localhost';
-export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? `http://${hostDoExpo}:3000`;
+//
+// No navegador (inclusive o do celular), o servidor está no mesmo computador
+// que serviu a página, então usamos o endereço que está na barra do navegador.
+function descobrirHost(): string {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    return window.location.hostname || 'localhost';
+  }
+  return Constants.expoConfig?.hostUri?.split(':')[0] ?? 'localhost';
+}
+export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? `http://${descobrirHost()}:3000`;
 
 // Erro com o status HTTP: a tela pode distinguir "senha errada" (401) de
 // "servidor fora do ar" (0) sem olhar o texto da mensagem.
@@ -34,19 +44,38 @@ export class ApiError extends Error {
   }
 }
 
+// Quem quiser saber que a sessão deixou de valer (o AuthProvider) registra
+// uma função aqui. O api.ts não conhece React: só chama o que foi registrado.
+let aoExpirar: (() => void) | null = null;
+
+export function definirAoExpirar(funcao: (() => void) | null) {
+  aoExpirar = funcao;
+}
+
 interface Opcoes {
   metodo?: 'GET' | 'POST';
   corpo?: unknown;
   // Quando existe, vai no cabeçalho Authorization. É assim que o servidor
   // descobre quem está pedindo.
   token?: string | null;
+  // false = um 401 aqui NÃO significa "sessão expirada" (ex.: logout).
+  tratar401?: boolean;
 }
 
-async function requisicao<T>(caminho: string, { metodo = 'GET', corpo, token }: Opcoes = {}) {
+async function requisicao<T>(
+  caminho: string,
+  { metodo = 'GET', corpo, token, tratar401 = true }: Opcoes = {},
+) {
   let resposta: Response;
+
+  // Sem limite de tempo, se a rede "engolir" o pedido (firewall, Wi-Fi que
+  // isola aparelhos) o fetch fica esperando minutos e a tela gira para sempre.
+  const controle = new AbortController();
+  const limite = setTimeout(() => controle.abort(), 8000);
 
   try {
     resposta = await fetch(`${API_URL}${caminho}`, {
+      signal: controle.signal,
       method: metodo,
       headers: {
         'Content-Type': 'application/json',
@@ -57,6 +86,8 @@ async function requisicao<T>(caminho: string, { metodo = 'GET', corpo, token }: 
   } catch {
     // fetch só rejeita quando NEM CHEGOU a falar com o servidor.
     throw new ApiError(0, `Não foi possível conectar em ${API_URL}. O servidor está rodando?`);
+  } finally {
+    clearTimeout(limite);
   }
 
   // 204 = sucesso sem corpo (o logout responde assim).
@@ -66,12 +97,17 @@ async function requisicao<T>(caminho: string, { metodo = 'GET', corpo, token }: 
 
   // 4xx e 5xx NÃO rejeitam o fetch: quem decide que é erro somos nós.
   if (!resposta.ok) {
+    // 401 COM token = o servidor não reconhece mais esta sessão.
+    // 401 sem token (senha errada no login) não entra aqui.
+    // 403 também não: é falta de permissão, não de sessão.
+    if (resposta.status === 401 && token && tratar401) {
+      aoExpirar?.();
+    }
     throw new ApiError(resposta.status, dados?.mensagem ?? `Erro ${resposta.status}`);
   }
 
   return dados as T;
 }
-
 export const api = {
   login: (email: string, senha: string) =>
     requisicao<Sessao>('/auth/login', { metodo: 'POST', corpo: { email, senha } }),
@@ -79,14 +115,24 @@ export const api = {
   cadastrar: (nome: string, email: string, senha: string) =>
     requisicao<Sessao>('/auth/cadastro', { metodo: 'POST', corpo: { nome, email, senha } }),
 
-  sair: (token: string) => requisicao<void>('/auth/logout', { metodo: 'POST', token }),
+  sair: (token: string) => requisicao<void>('/auth/logout', { metodo: 'POST', token, tratar401: false }),
 
   perfil: (token: string | null) => requisicao<Usuario>('/auth/me', { token }),
 
   listarAnotacoes: (token: string | null) => requisicao<Anotacao[]>('/anotacoes', { token }),
 
+  buscarAnotacao: (token: string | null, id: string) => requisicao<Anotacao>(`/anotacoes/${encodeURIComponent(id)}`, { token }),
+
+  listarAnotacoesModeracao: (token: string | null) => requisicao<Anotacao[]>('/moderacao/anotacoes', { token }),
+
   criarAnotacao: (token: string | null, texto: string) =>
     requisicao<Anotacao>('/anotacoes', { metodo: 'POST', corpo: { texto }, token }),
 
   listarUsuarios: (token: string | null) => requisicao<UsuarioResumo[]>('/usuarios', { token }),
+};
+
+export const armazenamentoSessao = {
+  ler: () => AsyncStorage.getItem('sessao'),
+  salvar: (sessao: Sessao) => AsyncStorage.setItem('sessao', JSON.stringify(sessao)),
+  apagar: () => AsyncStorage.removeItem('sessao'),
 };

@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 
 import { Colors } from '@/constants/theme';
+import { TelaDeEspera } from '@/components/tela-de-espera';
 import { AuthProvider, useAuth } from '@/contexts/auth-context';
 
 // LAYOUT RAIZ — src/app/_layout.tsx
@@ -25,7 +26,8 @@ export default function RootLayout() {
 }
 
 function RotasDoApp() {
-  const { usuario } = useAuth();
+  const { usuario, restaurando } = useAuth();
+  if (restaurando) return <TelaDeEspera mensagem="Restaurando sua sessão…" />;
   const logado = usuario !== null;
 
   return (

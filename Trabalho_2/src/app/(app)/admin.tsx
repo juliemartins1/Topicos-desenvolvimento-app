@@ -10,8 +10,7 @@ import { UsuarioItem } from '@/components/usuario-item';
 import { Colors, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth-context';
 import type { UsuarioResumo } from '@/models/usuario';
-import { api } from '@/services/api';
-
+import { api, ApiError } from '@/services/api';
 // ADMINISTRAÇÃO — src/app/(app)/admin.tsx  ->  rota "/admin"
 //
 // Esta tela só é montada para admin: o Stack.Protected em (app)/_layout.tsx
@@ -35,7 +34,7 @@ export default function AdminScreen() {
     try {
       setUsuarios(await api.listarUsuarios(token));
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível carregar.');
+      setErro(e instanceof ApiError ? e.message : 'Não foi possível carregar.');
     } finally {
       setCarregando(false);
     }

@@ -1,23 +1,24 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 
 import { Colors, Spacing } from '@/constants/theme';
 import type { Anotacao } from '@/models/usuario';
 
 interface AnotacaoItemProps {
   anotacao: Anotacao;
+  onPress?: () => void;
 }
 
-export function AnotacaoItem({ anotacao }: AnotacaoItemProps) {
+export function AnotacaoItem({ anotacao, onPress }: AnotacaoItemProps) {
   const data = new Date(anotacao.criadaEm);
 
   return (
-    <View style={styles.item}>
+    <Pressable style={styles.item} onPress={onPress}>
       <Text style={styles.texto}>{anotacao.texto}</Text>
       <Text style={styles.meta}>
         {data.toLocaleDateString('pt-BR')} às{' '}
         {data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
       </Text>
-    </View>
+    </Pressable>
   );
 }
 

@@ -7,7 +7,9 @@ import { MensagemErro } from '@/components/mensagem-erro';
 import { Note } from '@/components/note';
 import { PrimaryButton } from '@/components/primary-button';
 import { Colors, Spacing } from '@/constants/theme';
+import { TelaDeEspera } from '@/components/tela-de-espera';
 import { useAuth } from '@/contexts/auth-context';
+import { ApiError } from '@/services/api';
 
 // TELA DE CADASTRO — src/app/(auth)/cadastro.tsx  ->  rota "/cadastro"
 //
@@ -15,7 +17,7 @@ import { useAuth } from '@/contexts/auth-context';
 // O servidor já devolve a sessão no cadastro, então `cadastrar` também
 // deixa o usuário logado — e o layout raiz troca de grupo do mesmo jeito.
 export default function CadastroScreen() {
-  const { cadastrar } = useAuth();
+  const { cadastrar, carregando } = useAuth();
 
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
@@ -31,11 +33,13 @@ export default function CadastroScreen() {
     } catch (e) {
       // As regras (e-mail válido, senha mínima, e-mail repetido) estão no
       // servidor; a tela só mostra a mensagem que ele mandou.
-      setErro(e instanceof Error ? e.message : 'Não foi possível cadastrar.');
+      setErro(e instanceof ApiError ? e.message : 'Não foi possível cadastrar.');
     } finally {
       setEnviando(false);
     }
   }
+
+  if (carregando) return <TelaDeEspera mensagem="Criando sua conta…" />;
 
   return (
     <ScrollView

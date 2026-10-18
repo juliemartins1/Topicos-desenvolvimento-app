@@ -21,6 +21,7 @@ export default function InicioScreen() {
   if (!usuario) return null;
 
   const admin = usuario.papel === 'admin';
+  const podeModerar = admin || usuario.papel === 'moderador';
 
   return (
     <ScrollView style={styles.tela} contentContainerStyle={styles.conteudo}>
@@ -47,6 +48,7 @@ export default function InicioScreen() {
         />
         {/* O menu decide o que MOSTRAR; o layout decide o que EXISTE.
             As duas decisões leem o mesmo `usuario` do contexto. */}
+        {podeModerar ? <MenuLink href="/moderacao" emoji="🔎" title="Moderação" description="Consultar anotações de todos os usuários." /> : null}
         {admin ? (
           <MenuLink
             href="/admin"

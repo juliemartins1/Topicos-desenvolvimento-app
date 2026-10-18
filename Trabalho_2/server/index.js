@@ -13,9 +13,9 @@
 //   GET  /anotacoes       (token)                 -> 200 [anotacao]
 //   POST /anotacoes       (token) { texto }       -> 201 anotacao
 //   GET  /usuarios        (token de admin)        -> 200 [usuario]
-//
-// "(token)" = a requisição precisa do cabeçalho  Authorization: Bearer <token>
 //   GET  /moderacao/anotacoes (moderador ou admin) -> 200 [anotacao com autor]
+// "(token)" = a requisição precisa do cabeçalho  Authorization: Bearer <token>
+//  GET  /anotacoes/:id   (token)                 -> 200 anotacao | 404
 
 import cors from 'cors';
 import express from 'express';
@@ -90,6 +90,7 @@ app.get('/', (req, res) => {
       'POST /anotacoes',
       'GET  /usuarios (admin)',
       'GET  /moderacao/anotacoes (moderador ou admin)',
+      'GET  /anotacoes/:id',
     ],
   });
 });
@@ -149,6 +150,16 @@ app.post('/auth/logout', autenticado, (req, res) => {
 // do token, não algo que o cliente mandou.
 app.get('/anotacoes', autenticado, (req, res) => {
   res.json(banco.listarAnotacoes(req.usuario.id));
+});
+
+app.get('/anotacoes/:id', autenticado, (req, res) => {
+  // O filtro usa o id que veio do token (req.usuario.id), não algo que o
+  // cliente mandou. 404 tanto para "não existe" quanto para "é de outro".
+  const anotacao = banco.buscarAnotacao(req.params.id, req.usuario.id);
+  if (!anotacao) {
+    return res.status(404).json({ mensagem: 'Anotação não encontrada.' });
+  }
+  res.json(anotacao);
 });
 
 app.post('/anotacoes', autenticado, (req, res) => {

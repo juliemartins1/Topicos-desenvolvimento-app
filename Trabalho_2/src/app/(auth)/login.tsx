@@ -9,15 +9,16 @@ import { Note } from '@/components/note';
 import { PrimaryButton } from '@/components/primary-button';
 import { SessaoAtual } from '@/components/sessao-atual';
 import { Colors, Spacing } from '@/constants/theme';
+import { TelaDeEspera } from '@/components/tela-de-espera';
 import { useAuth } from '@/contexts/auth-context';
-import { API_URL } from '@/services/api';
+import { API_URL, ApiError } from '@/services/api';
 
 // TELA DE LOGIN — src/app/(auth)/login.tsx  ->  rota "/login"
 //
 // A tela não guarda o usuário: ela só pede ao contexto para entrar. O que
 // é dela é o estado do FORMULÁRIO — campos, erro e "enviando".
 export default function LoginScreen() {
-  const { entrar } = useAuth();
+  const { entrar, sessaoExpirada, carregando } = useAuth();
 
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
@@ -32,7 +33,7 @@ export default function LoginScreen() {
       // Deu certo: o AuthProvider mudou `usuario`, o layout raiz reagiu e
       // esta tela já não existe mais. Não há router.replace('/') aqui.
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível entrar.');
+      setErro(e instanceof ApiError ? e.message : 'Não foi possível entrar.');
     } finally {
       setEnviando(false);
     }
@@ -45,6 +46,8 @@ export default function LoginScreen() {
     setErro(null);
   }
 
+  if (carregando) return <TelaDeEspera mensagem="Entrando na sua conta…" />;
+
   return (
     <ScrollView
       style={styles.tela}
@@ -52,6 +55,7 @@ export default function LoginScreen() {
       keyboardShouldPersistTaps="handled"
       automaticallyAdjustKeyboardInsets>
       <Header title="Entrar" subtitle="Use uma conta de teste ou crie a sua" />
+      {sessaoExpirada ? <Note>Sua sessão expirou. Entre novamente.</Note> : null}
 
       <View style={styles.formulario}>
         <Campo
@@ -88,6 +92,11 @@ export default function LoginScreen() {
             label="Ana (usuária)"
             variant="secondary"
             onPress={() => usarConta('ana@ifrs.edu.br', '123456')}
+          />
+          <PrimaryButton
+            label="Moderadora"
+            variant="secondary"
+            onPress={() => usarConta('moderador@ifrs.edu.br', 'mod123')}
           />
           <PrimaryButton
             label="Administrador"
@@ -135,6 +144,7 @@ const styles = StyleSheet.create({
   },
   atalhos: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: Spacing.sm,
   },
   link: {

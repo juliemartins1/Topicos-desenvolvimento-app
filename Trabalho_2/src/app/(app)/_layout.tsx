@@ -22,12 +22,16 @@ export default function AppLayout() {
         contentStyle: { backgroundColor: Colors.background },
       }}>
       <Stack.Screen name="index" options={{ title: 'Início' }} />
-      <Stack.Screen name="anotacoes" options={{ title: 'Minhas anotações' }} />
+      <Stack.Screen name="anotacoes/index" options={{ title: 'Minhas anotações' }} />
+      <Stack.Screen name="anotacoes/[id]" options={{ title: 'Detalhe da anotação' }} />
       <Stack.Screen name="perfil" options={{ title: 'Perfil' }} />
 
       {/* Para quem não é admin, esta rota simplesmente não existe:
           router.push('/admin') leva de volta ao início. O servidor confere
           de novo (403) — a proteção no app é só para a interface. */}
+      <Stack.Protected guard={usuario?.papel === 'moderador' || usuario?.papel === 'admin'}>
+        <Stack.Screen name="moderacao" options={{ title: 'Moderação' }} />
+      </Stack.Protected>
       <Stack.Protected guard={usuario?.papel === 'admin'}>
         <Stack.Screen name="admin" options={{ title: 'Administração' }} />
       </Stack.Protected>

@@ -13,6 +13,7 @@ import { useAuth } from '@/contexts/auth-context';
 export function SessaoAtual() {
   const { usuario, token } = useAuth();
   const pathname = usePathname();
+  console.log('[evidência Context API] SessaoAtual renderizou', { pathname, papel: usuario?.papel ?? null });
 
   return (
     <View style={styles.container}>

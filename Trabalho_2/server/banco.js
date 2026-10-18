@@ -108,6 +108,14 @@ export function listarAnotacoes(usuarioId) {
     .sort((a, b) => b.criadaEm.localeCompare(a.criadaEm));
 }
 
+// Busca UMA anotação, mas só se pertencer a quem pediu. Para anotação
+// inexistente e para anotação de outra pessoa o resultado é o mesmo (null):
+// assim o servidor não revela que a anotação alheia existe.
+export function buscarAnotacao(id, usuarioId) {
+  const anotacao = anotacoes.get(id);
+  if (!anotacao || anotacao.usuarioId !== usuarioId) return null;
+  return anotacao;
+}
 export function criarAnotacao(usuarioId, texto) {
   const anotacao = {
     id: randomUUID(),
@@ -139,7 +147,7 @@ export function listarTodasAnotacoes() {
 export const CONTAS_DE_TESTE = [
   { nome: 'Administrador', email: 'admin@ifrs.edu.br', senha: 'admin123', papel: 'admin' },
   { nome: 'Ana', email: 'ana@ifrs.edu.br', senha: '123456', papel: 'usuario' },
-  {nome: 'Moderadora_Julie', email: 'julie@ifrs.edu.br', senha: '789456', papel:'moderador'}
+  { nome: 'Moderadora', email: 'moderador@ifrs.edu.br', senha: 'mod123', papel: 'moderador' },
 ];
 
 for (const conta of CONTAS_DE_TESTE) {

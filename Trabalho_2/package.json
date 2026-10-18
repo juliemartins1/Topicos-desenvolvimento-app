@@ -34,6 +34,8 @@
   },
   "scripts": {
     "start": "expo start",
+    "servidor": "npm --prefix server start",
+    "celular-usb": "adb reverse tcp:8081 tcp:8081 && adb reverse tcp:3000 tcp:3000 && expo start --android",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
     "ios": "expo start --ios",
