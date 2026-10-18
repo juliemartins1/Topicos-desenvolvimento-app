@@ -4,9 +4,3 @@
 
 expo-env.d.ts
 # @end expo-cli
-/node_modules
-/server/node_modules
-node_modules/
-server/node_modules/
-.expo/
-dist/

@@ -1,5 +1,4 @@
 import Constants from 'expo-constants';
-import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type { Anotacao, Sessao, Usuario, UsuarioResumo } from '@/models/usuario';
@@ -21,16 +20,8 @@ import type { Anotacao, Sessao, Usuario, UsuarioResumo } from '@/models/usuario'
 // Constants.expoConfig.hostUri ("192.168.0.10:8081").
 //
 // Para apontar para outro lugar: EXPO_PUBLIC_API_URL=http://... npx expo start
-//
-// No navegador (inclusive o do celular), o servidor está no mesmo computador
-// que serviu a página, então usamos o endereço que está na barra do navegador.
-function descobrirHost(): string {
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    return window.location.hostname || 'localhost';
-  }
-  return Constants.expoConfig?.hostUri?.split(':')[0] ?? 'localhost';
-}
-export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? `http://${descobrirHost()}:3000`;
+const hostDoExpo = Constants.expoConfig?.hostUri?.split(':')[0] ?? 'localhost';
+export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? `http://${hostDoExpo}:3000`;
 
 // Erro com o status HTTP: a tela pode distinguir "senha errada" (401) de
 // "servidor fora do ar" (0) sem olhar o texto da mensagem.
@@ -68,14 +59,8 @@ async function requisicao<T>(
 ) {
   let resposta: Response;
 
-  // Sem limite de tempo, se a rede "engolir" o pedido (firewall, Wi-Fi que
-  // isola aparelhos) o fetch fica esperando minutos e a tela gira para sempre.
-  const controle = new AbortController();
-  const limite = setTimeout(() => controle.abort(), 8000);
-
   try {
     resposta = await fetch(`${API_URL}${caminho}`, {
-      signal: controle.signal,
       method: metodo,
       headers: {
         'Content-Type': 'application/json',
@@ -86,8 +71,6 @@ async function requisicao<T>(
   } catch {
     // fetch só rejeita quando NEM CHEGOU a falar com o servidor.
     throw new ApiError(0, `Não foi possível conectar em ${API_URL}. O servidor está rodando?`);
-  } finally {
-    clearTimeout(limite);
   }
 
   // 204 = sucesso sem corpo (o logout responde assim).

@@ -18,7 +18,7 @@ import { API_URL, ApiError } from '@/services/api';
 // A tela não guarda o usuário: ela só pede ao contexto para entrar. O que
 // é dela é o estado do FORMULÁRIO — campos, erro e "enviando".
 export default function LoginScreen() {
-  const { entrar, sessaoExpirada, carregando } = useAuth();
+   const { entrar, sessaoExpirada, carregando } = useAuth();
 
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
@@ -144,7 +144,6 @@ const styles = StyleSheet.create({
   },
   atalhos: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: Spacing.sm,
   },
   link: {

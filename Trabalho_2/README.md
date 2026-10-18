@@ -20,21 +20,7 @@ npm install
 npx expo start
 ```
 
-O servidor escuta na porta 3000 e mantém os dados em memória.
-
-### Rodando no celular
-
-**Pelo cabo USB (Android, mais simples):** com a depuração USB ativada, rode `npm run celular-usb` no lugar de `npx expo start`. O script faz `adb reverse` das portas 8081 (Expo) e 3000 (API), então o celular acessa o computador pelo cabo e o Wi-Fi não interfere.
-
-**Pelo Wi-Fi (Expo Go):** celular e computador precisam estar na mesma rede. O app usa o IP que o Expo informa; se a mensagem de erro mostrar `127.0.0.1`, inicie o Expo informando o IP do computador:
-
-```bash
-EXPO_PUBLIC_API_URL=http://IP_DO_COMPUTADOR:3000 npx expo start
-```
-
-Para conferir a rede, abra `http://IP_DO_COMPUTADOR:3000` no navegador do celular: deve aparecer o JSON do servidor. Se não abrir, libere a porta no firewall (`sudo ufw allow 3000` no Ubuntu).
-
-Se o servidor não responder em 8 segundos, o app mostra o erro de conexão em vez de ficar carregando indefinidamente.
+O servidor escuta na porta 3000 e mantém os dados em memória. O app identifica o IP do computador pelo Expo; celular e computador devem estar na mesma rede Wi-Fi. Se necessário, configure `EXPO_PUBLIC_API_URL=http://IP_DO_COMPUTADOR:3000` antes de iniciar o Expo.
 
 ### Contas de teste
 
@@ -82,16 +68,6 @@ Quando o `value` de um contexto muda por identidade, React re-renderiza os compo
 
 Sem o React Compiler, envolveria as funções em `useCallback` com suas dependências e montaria o objeto do contexto com `useMemo`, também com dependências corretas. Como evidência inicial, `src/components/sessao-atual.tsx` registra no console `[evidência Context API] SessaoAtual renderizou` com a rota e o papel atual. Faça login e observe o terminal; depois desative `reactCompiler` em `app.json`, reinicie o Expo limpando o cache (`npx expo start -c`) e compare. O log indica renderizações, mas não prova sozinho que elas causam lentidão; o Profiler seria a medida mais completa.
 
-**Resultado observado.** Com o log em `SessaoAtual`, executei o fluxo Perfil → Sair → Entrar com `reactCompiler` ligado e desligado:
-
-| Ação | `reactCompiler: true` | `reactCompiler: false` |
-|---|---|---|
-| Abrir Perfil (`/perfil`) | 2 | 2 |
-| Sair → tela de login (`/login`) | 2 | 2 |
-| Entrar → Início (`/`) | 1 | 1 |
-
-O número de renderizações foi o mesmo nas duas configurações. As renderizações acompanharam mudanças reais do contexto (usuário entrou ou saiu) e da rota, e não a recriação de `entrar`, `cadastrar` e `sair`. Concluo que, neste app pequeno, a recriação das funções não gera custo perceptível. Em um contexto com muitos consumidores, `useCallback` e `useMemo` (ou o React Compiler) evitariam renderizações desnecessárias. Após o teste, `reactCompiler` voltou a `true`.
-
 ## Tabela de rotas do servidor
 
 | Método | Rota | Autenticação/permissão | Resposta principal |
@@ -109,25 +85,11 @@ O número de renderizações foi o mesmo nas duas configurações. As renderiza�
 
 ## Evidências e vídeo
 
-Capturas feitas com o app em execução em um celular Android:
-
-| Detalhe de uma anotação (4.3) | Início como Ana — sem Moderação (4.4) | Início como Moderadora — com Moderação (4.4) |
-|---|---|---|
-| <img src="docs/prints/detalhe-anotacao.jpg" width="220"> | <img src="docs/prints/inicio-ana.jpg" width="220"> | <img src="docs/prints/inicio-moderadora.jpg" width="220"> |
-
-Na tela da Ana, o menu mostra apenas "Minhas anotações" e "Perfil"; para a moderadora aparece também "Moderação", e "Administração" continua escondida, pois é exclusiva do admin.
-
-| Tela de espera ao restaurar a sessão (4.2/4.5) | Aviso de sessão expirada no login (4.1) |
-|---|---|
-| <img src="docs/prints/restaurando-sessao.jpg" width="220"> | <img src="docs/prints/sessao-expirada.jpg" width="220"> |
-
-A tela "Restaurando sua sessão…" aparece ao abrir o app enquanto o token salvo é validado com `GET /auth/me`. O aviso de sessão expirada apareceu após reiniciar o servidor com o app logado: a requisição seguinte recebeu 401 e o app voltou sozinho ao login.
-
-| Tela de moderação (4.4) |
-|---|
-| <img src="docs/prints/moderacao.jpg" width="220"> |
-
-Logada como moderadora, a tela lista as anotações de todos os usuários com o nome do autor, vindas de `GET /moderacao/anotacoes`.
+Adicionar aqui as capturas feitas com o app em execução:
+- [ ] Tela de espera durante login/restauração.
+- [ ] Detalhe de uma anotação.
+- [ ] Tela de moderação.
+- [ ] Aviso de sessão expirada no login.
 
 **Vídeo de explicação (até 10 minutos):** [inserir link com acesso liberado ao professor]. No vídeo, demonstrar o fluxo de login, a expiração/restauração da sessão e a diferença entre proteção visual do app e autorização do servidor.
 
