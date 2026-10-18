@@ -1,4 +1,3 @@
-
 # Trabalho Prático II — Autenticação, Contexto e Rotas Protegidas
 
 **Aluna:** Julie Monteiro  
@@ -25,6 +24,22 @@ O servidor escuta na porta 3000 e mantém os dados em memória.
 
 ### Rodando no celular
 
+**No simulador de iPhone (Mac com Xcode):**
+
+1. No Mac, tenha o **Xcode** instalado com um simulador de iOS (Xcode → Settings → Components/Platforms → iOS).
+2. Terminal 1, na pasta `Trabalho_2`: `cd server && npm install && npm start`.
+3. Terminal 2, na pasta `Trabalho_2`:
+
+```bash
+npm install
+npx expo start --ios
+```
+
+(Ou rode `npx expo start` e aperte `i` no terminal.) O Expo abre o simulador e instala o Expo Go nele automaticamente na primeira vez.
+
+No simulador, `localhost` e o IP do Mac apontam para o próprio Mac, então o app encontra a API sozinho, sem nenhuma configuração extra — o endereço usado aparece no aviso do rodapé da tela de login. Se o macOS perguntar se o Node pode aceitar conexões de rede, clique em **Permitir**.
+
+
 **Pelo cabo USB (Android) — forma recomendada e testada:**
 
 1. No celular, ative as Opções do desenvolvedor e a **Depuração USB**, conecte o cabo e aceite a mensagem "Permitir depuração USB".
@@ -41,13 +56,31 @@ O `adb reverse` cria um túnel pelo cabo: no celular, `127.0.0.1:8081` passa a s
 
 Se o cabo for desconectado ou o celular reiniciar, rode os dois `adb reverse` de novo. Na primeira execução o bundle pode demorar alguns minutos.
 
-**Pelo Wi-Fi (Expo Go):** celular e computador precisam estar na mesma rede. O app usa o IP que o Expo informa; se a mensagem de erro mostrar `127.0.0.1`, inicie o Expo informando o IP do computador:
+**No iPhone (Expo Go, pelo Wi-Fi):** o iPhone não tem `adb reverse`, então a conexão é sempre pela rede.
+
+1. Instale o **Expo Go** pela App Store, numa versão compatível com o Expo SDK 57 (mantenha o app atualizado).
+2. Conecte o iPhone e o computador **na mesma rede Wi-Fi**.
+3. Libere as portas no firewall do computador (no Ubuntu: `sudo ufw allow 8081` e `sudo ufw allow 3000`).
+4. Com o servidor rodando no Terminal 1, rode no Terminal 2, na pasta `Trabalho_2`:
+
+```bash
+npx expo start
+```
+
+5. Abra o app **Câmera** do iPhone e aponte para o QR code do terminal; toque no aviso para abrir no Expo Go.
+6. Na primeira vez, o iOS pergunta se o Expo Go pode **encontrar dispositivos na rede local**: toque em **Permitir**. Sem essa permissão o app não alcança o computador. (Se negou sem querer: Ajustes → Expo Go → Rede Local.)
+
+O app descobre sozinho o IP do computador pelo Expo e usa `http://IP_DO_COMPUTADOR:3000` para a API; o endereço aparece no aviso do rodapé da tela de login.
+
+Para conferir a rede antes, abra `http://IP_DO_COMPUTADOR:3000` no **Safari** do iPhone: deve aparecer o JSON do servidor. Se não abrir, o firewall ou a rede está bloqueando. Redes de faculdade costumam isolar os aparelhos; nesse caso, ative o **Acesso Pessoal** (hotspot) do iPhone, conecte o computador nele e rode `npx expo start` de novo.
+
+Se a mensagem de erro mostrar o endereço errado (por exemplo `127.0.0.1`), informe o IP manualmente (descubra com `hostname -I` no Linux ou `ipconfig` no Windows):
 
 ```bash
 EXPO_PUBLIC_API_URL=http://IP_DO_COMPUTADOR:3000 npx expo start
 ```
 
-Para conferir a rede, abra `http://IP_DO_COMPUTADOR:3000` no navegador do celular: deve aparecer o JSON do servidor. Se não abrir, libere a porta no firewall (`sudo ufw allow 3000` no Ubuntu).
+**Android pelo Wi-Fi:** os mesmos passos do iPhone valem para Android, escaneando o QR code de dentro do próprio Expo Go.
 
 Se o servidor não responder em 8 segundos, o app mostra o erro de conexão em vez de ficar carregando indefinidamente.
 
@@ -106,6 +139,87 @@ Sem o React Compiler, envolveria as funções em `useCallback` com suas dependê
 | Entrar → Início (`/`) | 1 | 1 |
 
 O número de renderizações foi o mesmo nas duas configurações. As renderizações acompanharam mudanças reais do contexto (usuário entrou ou saiu) e da rota, e não a recriação de `entrar`, `cadastrar` e `sair`. Concluo que, neste app pequeno, a recriação das funções não gera custo perceptível. Em um contexto com muitos consumidores, `useCallback` e `useMemo` (ou o React Compiler) evitariam renderizações desnecessárias. Após o teste, `reactCompiler` voltou a `true`.
+
+## Roteiro de testes
+
+Todos os testes abaixo foram executados com o app em um celular Android. Deixe o terminal do servidor visível: cada requisição aparece nele (por exemplo `GET /auth/me -> 200`).
+
+### 0. Preparação
+- Terminal 1: `cd server && npm start`.
+- Terminal 2: inicie o app por uma das formas da seção "Rodando no celular".
+- **Esperado:** abre a tela de login; o aviso no rodapé mostra o endereço da API em uso.
+
+### 4.2 — Estado carregando
+| Passo | Esperado |
+|---|---|
+| Tocar em **Ana (usuária)** e em **Entrar** | Aparece "Entrando na sua conta…" e depois o Início com "Olá, Ana" |
+| Sair, digitar a senha `999999` e tocar em Entrar | A espera aparece e o login volta com "E-mail ou senha incorretos." — o e-mail digitado continua no campo (o erro não se perde) |
+
+### 4.3 — Detalhe da anotação
+| Passo | Esperado |
+|---|---|
+| Como Ana, abrir **Minhas anotações** e tocar em uma anotação | "Carregando anotação…" e depois o texto, a data formatada e o identificador |
+| Criar uma anotação nova e abrir o detalhe dela | Mesmo comportamento, com a anotação recém-criada |
+| Pedir um id inexistente pelo terminal (comandos abaixo) | `404 Not Found` com "Anotação não encontrada." |
+
+### 4.4 — Papel moderador
+| Passo | Esperado |
+|---|---|
+| Entrar como **Ana** | O Início **não** mostra "Moderação" nem "Administração". "Tentar abrir /admin mesmo assim" mantém a usuária no Início, porque a rota não existe para o papel dela |
+| Entrar como **Moderadora** | Aparece "Moderação" (e não "Administração"); a tela lista as anotações de todos com "Autor: Ana" |
+| Entrar como **Administrador** | Aparecem "Moderação" e "Administração", e as duas abrem |
+| `GET /moderacao/anotacoes` com token da Ana | `403 Forbidden` |
+| `GET /moderacao/anotacoes` com token da moderadora | `200 OK` com a lista e o autor de cada anotação |
+| `GET /usuarios` com token da moderadora | `403 Forbidden` (rota exclusiva do admin) |
+
+### 4.5 — Sessão que sobrevive ao reload
+| Passo | Esperado |
+|---|---|
+| Entrar como Ana, fechar o app totalmente e abrir de novo | "Restaurando sua sessão…" e depois o Início direto, sem pedir login; no servidor aparece `GET /auth/me -> 200` |
+| Logada, parar o servidor (`Ctrl+C`) e recarregar o app (`r` no terminal do Expo) | Em até ~8 segundos aparece o login (status 0); o token salvo é mantido |
+| Subir o servidor de novo e recarregar | "Restaurando…" e depois o login: o servidor reiniciado não conhece o token, responde 401 e o app apaga a sessão salva |
+
+### 4.1 — Sessão expirada (401)
+| Passo | Esperado |
+|---|---|
+| Como Ana, reiniciar o servidor e depois tocar em **Perfil → Conferir token no servidor** (ou adicionar uma anotação) | O app volta sozinho ao login com "Sua sessão expirou. Entre novamente." |
+| Entrar de novo e tocar em **Sair** (fim da tela Perfil) | Volta ao login **sem** o aviso de sessão expirada |
+| Como Ana, fazer uma requisição que dá 403 (comando abaixo) | O app continua logado: 403 é falta de permissão, não sessão expirada |
+
+### 4.6 — Evidência das renderizações
+| Passo | Esperado |
+|---|---|
+| Fazer login e observar o terminal do Expo | Linhas `[evidência Context API] SessaoAtual renderizou` com a rota e o papel |
+| Trocar `"reactCompiler"` para `false` no `app.json`, rodar o Expo com `-c` e repetir o mesmo fluxo | Comparar as contagens (resultado registrado na seção 4.6) e voltar a opção para `true` |
+
+### Comandos de terminal para os testes do servidor
+
+Os tokens são obtidos pelo próprio terminal, sem copiar à mão. Rode tudo no **mesmo terminal**, com o servidor no ar:
+
+```bash
+# Token da Ana
+TOKEN=$(curl -s -X POST http://localhost:3000/auth/login -H 'Content-Type: application/json' -d '{"email":"ana@ifrs.edu.br","senha":"123456"}' | sed 's/.*"token":"\([^"]*\)".*/\1/'); echo "Ana: [$TOKEN]"
+
+# 4.3 — anotação inexistente: esperado 404
+curl -i http://localhost:3000/anotacoes/abc -H "Authorization: Bearer $TOKEN"
+
+# 4.4 — Ana na moderação: esperado 403
+curl -i http://localhost:3000/moderacao/anotacoes -H "Authorization: Bearer $TOKEN"
+
+# Token da moderadora
+TOKEN_MOD=$(curl -s -X POST http://localhost:3000/auth/login -H 'Content-Type: application/json' -d '{"email":"moderador@ifrs.edu.br","senha":"mod123"}' | sed 's/.*"token":"\([^"]*\)".*/\1/'); echo "Moderadora: [$TOKEN_MOD]"
+
+# 4.4 — moderadora na moderação: esperado 200
+curl -i http://localhost:3000/moderacao/anotacoes -H "Authorization: Bearer $TOKEN_MOD"
+
+# 4.4 — moderadora na lista de usuários: esperado 403
+curl -i http://localhost:3000/usuarios -H "Authorization: Bearer $TOKEN_MOD"
+
+# 4.1 — token inválido: esperado 401
+curl -i http://localhost:3000/auth/me -H "Authorization: Bearer token-invalido"
+```
+
+Use aspas duplas em `"Authorization: Bearer $TOKEN"`: com aspas simples o terminal não substitui a variável e o servidor responde 401. Se os comandos `TOKEN=` e `curl` forem rodados em terminais diferentes, a variável chega vazia pelo mesmo motivo.
 
 ## Tabela de rotas do servidor
 
