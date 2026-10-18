@@ -15,6 +15,7 @@
 //   GET  /usuarios        (token de admin)        -> 200 [usuario]
 //
 // "(token)" = a requisição precisa do cabeçalho  Authorization: Bearer <token>
+//   GET  /moderacao/anotacoes (moderador ou admin) -> 200 [anotacao com autor]
 
 import cors from 'cors';
 import express from 'express';
@@ -63,12 +64,15 @@ function autenticado(req, res, next) {
 }
 
 // 403 (proibido) é diferente de 401: o servidor sabe quem é, mas essa
-// pessoa não pode fazer isso.
-function somenteAdmin(req, res, next) {
-  if (req.usuario.papel !== 'admin') {
-    return res.status(403).json({ mensagem: 'Somente administradores podem acessar isto.' });
-  }
-  next();
+// pessoa não pode fazer isso. Recebe os papéis permitidos e devolve o
+// middleware; deve vir DEPOIS de `autenticado`, que preenche req.usuario.
+function somentePapeis(...papeis) {
+  return (req, res, next) => {
+    if (!papeis.includes(req.usuario.papel)) {
+      return res.status(403).json({ mensagem: 'Você não tem permissão para acessar isto.' });
+    }
+    next();
+  };
 }
 
 // ------------------------------------------------------------------ rotas
@@ -85,6 +89,7 @@ app.get('/', (req, res) => {
       'GET  /anotacoes',
       'POST /anotacoes',
       'GET  /usuarios (admin)',
+      'GET  /moderacao/anotacoes (moderador ou admin)',
     ],
   });
 });
@@ -154,8 +159,12 @@ app.post('/anotacoes', autenticado, (req, res) => {
   res.status(201).json(banco.criarAnotacao(req.usuario.id, texto));
 });
 
-app.get('/usuarios', autenticado, somenteAdmin, (req, res) => {
+app.get('/usuarios', autenticado, somentePapeis('admin'), (req, res) => {
   res.json(banco.listarUsuarios());
+});
+
+app.get('/moderacao/anotacoes', autenticado, somentePapeis('moderador', 'admin'), (req, res) => {
+  res.json(banco.listarTodasAnotacoes());
 });
 
 // Qualquer outro caminho.

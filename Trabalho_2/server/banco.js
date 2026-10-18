@@ -119,6 +119,19 @@ export function criarAnotacao(usuarioId, texto) {
   return anotacao;
 }
 
+// Para a moderação: todas as anotações de todos os usuários, cada uma com o
+// nome do autor. Não devolve usuarioId nem outros dados do usuário.
+export function listarTodasAnotacoes() {
+  return [...anotacoes.values()]
+    .map((anotacao) => ({
+      id: anotacao.id,
+      texto: anotacao.texto,
+      criadaEm: anotacao.criadaEm,
+      autor: usuarios.get(anotacao.usuarioId)?.nome ?? 'Desconhecido',
+    }))
+    .sort((a, b) => b.criadaEm.localeCompare(a.criadaEm));
+}
+
 // ------------------------------------------------------- dados iniciais
 
 // Duas contas prontas para a aula. A senha está aqui em texto só porque é
@@ -126,6 +139,7 @@ export function criarAnotacao(usuarioId, texto) {
 export const CONTAS_DE_TESTE = [
   { nome: 'Administrador', email: 'admin@ifrs.edu.br', senha: 'admin123', papel: 'admin' },
   { nome: 'Ana', email: 'ana@ifrs.edu.br', senha: '123456', papel: 'usuario' },
+  {nome: 'Moderadora_Julie', email: 'julie@ifrs.edu.br', senha: '789456', papel:'moderador'}
 ];
 
 for (const conta of CONTAS_DE_TESTE) {
